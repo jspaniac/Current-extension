@@ -1,0 +1,31 @@
+{
+    "name": "Current sound override",
+    "description": "Overrides current's provided sounds to include more :)",
+    "version": "1.0",
+    "manifest_version": 3,
+    "action": {
+        "default_popup": "page.html",
+        "default_icon": "assets/icon.png"
+    },
+    "content_scripts": [
+        {
+            "js": [
+                "scripts/popup.js"
+            ],
+            "matches": [
+                "https://r90.current-rms.com/*"
+            ]
+        }
+    ],
+    "background": {
+        "service_worker": "scripts/background.js"
+    },
+    "permissions": [
+        "scripting",
+        "tabs",
+        "declarativeNetRequest"
+    ],
+    "host_permissions": [
+        "*://r90.current-rms.com/*"
+    ]
+}

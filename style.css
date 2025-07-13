@@ -1,0 +1,9 @@
+.center {
+    text-align: center;
+}
+
+#submit {
+    margin-top: 25;
+    font-size: 25;
+    font-weight: bold;
+}
