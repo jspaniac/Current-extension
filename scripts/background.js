@@ -1,24 +1,25 @@
 // Cache user selected audio files until service worker reloads
-var previousRequest = null;
+var previousSetRequest = null;
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     (async() => {
         // Apply the cache on refresh
-        if (changeInfo.status === 'complete' && previousRequest && tab.url.includes("r90.current-rms.com")) {
+        if (changeInfo.status === 'complete' && tab.url.includes("r90.current-rms.com")) {
+            console.log("Navigated to R90 Current");
             await injectFunc(addToCobra);
             await setSound();
         }
-    });
+    })();
 })
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log(request);
-    
     (async() => {
         switch (request.action) {
             // User wants to update success / fail sounds
             case 'set-sound':
-                previousRequest = request;
+                previousSetRequest = request;
+                chrome.storage.local.set({ setSound: request }, () => console.log("Sound setting cached"));
                 await setSound();
 
                 sendResponse({ message: 'Sound set' });
@@ -26,18 +27,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // User wants to load previously uploaded success / fail sounds if they
             // still exist
             case 'refresh-sounds':
-                sendResponse({ message: await setSound() ? 'Sound set' : 'No cached sounds' });
-                break;
-            // User wants to update cobra to include 'user-success' and 'user-fail' audio pairs
-            case 'update-cobra':
-                await injectFunc(addToCobra);
-                sendResponse({ message: 'Cobra updated to include user options' });
+                let success = await setSound();
+                sendResponse({
+                    message: success ? 'Previously uploaded sounds set' : 'No previously uploaded sounds',
+                    previous: previousSetRequest
+                });
                 break;
             // Unsupported operation
             default:
                 sendResponse({ message: 'Invalid action' });
         }
-    })()
+    })();
 
     // True indicates async response
     return true;
@@ -46,19 +46,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 // Sets page success() and fail() sounds to what user has uploaded
 async function setSound() {
     // No uploaded success / fail sounds
-    if (!previousRequest) return false;
+    if (!previousSetRequest) {
+        // Try cache
+        previousSetRequest = (await chrome.storage.local.get(["setSound"])).setSound;
+        if (!previousSetRequest) return false;
+    }
     
     // Generate web traffic redirect rules. Ion.sound will automatically try to fetch files
     // that don't exist from r90.current-rms.com. Intercept and redirect to uploaded data streams
     newRules = [
-        generateRedirectRule(1, 'sounds/user-success', previousRequest.success),
-        generateRedirectRule(2, 'sounds/user-fail', previousRequest.fail)
+        generateRedirectRule(1, 'sounds/user-success', previousSetRequest.success),
+        generateRedirectRule(2, 'sounds/user-fail', previousSetRequest.fail)
     ];
     await updateRules(newRules);
 
     // Inject code to update ion.sound / cobra to user selected sounds. This needs to be run in MAIN
     // scope to access 'ion' and 'cobra' variables on page
-    await injectFunc(addToIon, [previousRequest.successVolume, previousRequest.failVolume]);
+    await injectFunc(addToIon, [previousSetRequest.successVolume, previousSetRequest.failVolume]);
     await injectFunc(setUserChoice);
 
     // Successful update
