@@ -13,7 +13,7 @@
                 "scripts/popup.js"
             ],
             "matches": [
-                "*://r90.current-rms.com/*"
+                "https://r90.current-rms.com/*"
             ]
         }
     ],

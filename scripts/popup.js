@@ -90,9 +90,5 @@ function submitFiles() {
     }, (response) => { 
         console.log(response);
         alertElement.textContent = response.message;
-        if (response.message === 'Sound set') {
-            // Play the success sound on good response
-            playSound(true);
-        }
     });
 }

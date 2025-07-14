@@ -2,12 +2,14 @@
 var previousSetRequest = null;
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    console.log(changeInfo, tab);
     (async() => {
         // Apply the cache on refresh
-        if (changeInfo.status === 'complete' && tab.url.includes("r90.current-rms.com")) {
+        if (tab.status === 'complete' && tab.url.includes("r90.current-rms.com")) {
             console.log("Navigated to R90 Current");
             await injectFunc(addToCobra);
-            await setSound();
+            await injectFunc(updateDropdown, [setUserChoice.toString()]);
+            if (!previousSetRequest || changeInfo.status === 'complete') await setSound();
         }
     })();
 })
@@ -19,17 +21,17 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // User wants to update success / fail sounds
             case 'set-sound':
                 previousSetRequest = request;
-                chrome.storage.local.set({ setSound: request }, () => console.log("Sound setting cached"));
+                await chrome.storage.local.set({ setSound: request }, () => console.log("Sound setting cached"));
                 await setSound();
+                await injectFunc(setUserChoice);
 
                 sendResponse({ message: 'Sound set' });
                 break;
             // User wants to load previously uploaded success / fail sounds if they
             // still exist
             case 'refresh-sounds':
-                let success = await setSound();
                 sendResponse({
-                    message: success ? 'Previously uploaded sounds set' : 'No previously uploaded sounds',
+                    message: previousSetRequest ? 'Previously uploaded sounds loaded' : 'No previously uploaded sounds',
                     previous: previousSetRequest
                 });
                 break;
@@ -44,26 +46,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 })
 
 // Sets page success() and fail() sounds to what user has uploaded
-async function setSound() {
+async function setSound(request) {
     // No uploaded success / fail sounds
     if (!previousSetRequest) {
         // Try cache
         previousSetRequest = (await chrome.storage.local.get(["setSound"])).setSound;
         if (!previousSetRequest) return false;
+        console.log("Reloaded cached sound");
     }
+
+    if (previousSetRequest == request) return;
     
     // Generate web traffic redirect rules. Ion.sound will automatically try to fetch files
     // that don't exist from r90.current-rms.com. Intercept and redirect to uploaded data streams
     newRules = [
         generateRedirectRule(1, 'sounds/user-success', previousSetRequest.success),
-        generateRedirectRule(2, 'sounds/user-fail', previousSetRequest.fail)
+        generateRedirectRule(2, 'sounds/user-fail', previousSetRequest.fail),
     ];
     await updateRules(newRules);
 
     // Inject code to update ion.sound / cobra to user selected sounds. This needs to be run in MAIN
     // scope to access 'ion' and 'cobra' variables on page
     await injectFunc(addToIon, [previousSetRequest.successVolume, previousSetRequest.failVolume]);
-    await injectFunc(setUserChoice);
 
     // Successful update
     return true;
@@ -110,10 +114,15 @@ async function injectFunc(func, args = []) {
 
 // Adds 'user-success' and 'user-fail' sounds to ion
 function addToIon(successVolume, failVolume) {
+    // Use rand to force a refresh
+    ion.sound.destroy('user-success');
+    ion.sound.destroy('user-fail');
+    console.log("TEST");
+
     ion.sound({
         sounds: [
-            { name: "user-success", path: "sounds/", volume: successVolume },
-            { name: "user-fail", path: "sounds/", volume: failVolume }
+            { name: `user-success`, path: "sounds/", volume: successVolume },
+            { name: `user-fail`, path: "sounds/", volume: failVolume },
         ],
         path: "sounds/",
         preload: true
@@ -125,17 +134,54 @@ function addToIon(successVolume, failVolume) {
 function addToCobra() {
     // Naively check one value - failure
     const isInjected = cobra.sound.sound_pairs[cobra.sound.sound_pairs.length - 1].failure == 'user-fail';
-    if (!isInjected) {
-        cobra.sound.sound_pairs[cobra.sound.sound_pairs.length] = {
-            success: 'user-success',
-            failure: 'user-fail'
-        };
-        console.log(cobra.sound.sound_pairs);
-    }
+    if (isInjected) return;
+
+    cobra.sound.sound_pairs[cobra.sound.sound_pairs.length] = {
+        success: 'user-success',
+        failure: 'user-fail',
+    };
+    console.log(cobra.sound.sound_pairs);
 }
 
 // Sets the selected sound pair to 'user-success' and 'user-fail' values.
 function setUserChoice() {
+    /* This function gets stringified, so can only use backtick quotes and multi-line comments :') */
     cobra.sound.selected_sound_pair_index = cobra.sound.sound_pairs.length - 1;
-    console.log(cobra.sound);
+
+    /* TODO: Update list elements to not have check mark */
+    const previousSelectedIcon = document.querySelector(`#sound_effects_toggle i.icn-cobra-checkmark`);
+    const parentAnchor = previousSelectedIcon.parentElement;
+    previousSelectedIcon.remove();
+    parentAnchor.innerText = parentAnchor.innerText.replace(/&nbsp;/g, ``).replace(/[\n\r]+/g, ``);
+
+    /* Update user elemnt to have checkmark */
+    const userLink = document.getElementById(`user-list-element`).children[0];
+    if (userLink.children.length == 1) return; /* Already exists */
+    
+    const checkMark = document.createElement(`i`);
+    checkMark.setAttribute(`class`, `icn-cobra-checkmark`);
+    userLink.innerHTML = ` \u00A0 User Uploaded`;
+    userLink.prepend(checkMark);
+
+    /* This breaks for some reason? */
+    const stop = cobra.sound.stop;
+    cobra.sound.stop = () => {};
+    cobra.sound.success();
+    cobra.sound.stop = stop;
+}
+
+function updateDropdown(setUserChoice) {
+    const soundToggle = document.getElementById("sound_effects_toggle");
+    if (!soundToggle) return;
+
+    // TODO: This is janky but :shrug:
+    const parent = soundToggle.children[0].children[1];
+    const baseSchemes = cobra.sound.sound_pairs.length;
+    if (parent.children.length == baseSchemes + 2) return;
+
+    // Need to insert 
+    let newListElement = document.createElement("li");
+    newListElement.setAttribute("id", "user-list-element")
+    newListElement.innerHTML = `<a href="javascript:${setUserChoice};setUserChoice();">User Uploaded</a>`
+    parent.append(newListElement)
 }
