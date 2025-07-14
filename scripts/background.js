@@ -2,11 +2,10 @@
 var previousSetRequest = null;
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    console.log(changeInfo, tab);
+    // console.log(changeInfo, tab);
     (async() => {
         // Apply the cache on refresh
         if (tab.status === 'complete' && tab.url.includes("r90.current-rms.com")) {
-            console.log("Navigated to R90 Current");
             await injectFunc(addToCobra);
             await injectFunc(updateDropdown, [setUserChoice.toString()]);
             if (!previousSetRequest || changeInfo.status === 'complete') await setSound();
@@ -117,7 +116,6 @@ function addToIon(successVolume, failVolume) {
     // Use rand to force a refresh
     ion.sound.destroy('user-success');
     ion.sound.destroy('user-fail');
-    console.log("TEST");
 
     ion.sound({
         sounds: [
@@ -140,7 +138,6 @@ function addToCobra() {
         success: 'user-success',
         failure: 'user-fail',
     };
-    console.log(cobra.sound.sound_pairs);
 }
 
 // Sets the selected sound pair to 'user-success' and 'user-fail' values.
