@@ -3,7 +3,7 @@ var previousSetRequest = null;
 var enabled = false;
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    console.log(changeInfo, tab);
+    // console.log(changeInfo, tab);
     (async() => {
         // Apply the cache on refresh
         if (tab.status === 'complete' && tab.url.includes("r90.current-rms.com")) {
