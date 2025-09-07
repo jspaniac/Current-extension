@@ -12,7 +12,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             if (!previousSetRequest || changeInfo.status === 'complete') await setSound();
             if (enabled === null || changeInfo.staus === 'complete')
                 enabled = (await chrome.storage.local.get(["enabled"])).enabled ?? false;
-            injectFunc(updateSetSound, [enabled]);
+            await injectFunc(updateSetSound, [enabled]);
         }
     })();
 })
@@ -68,6 +68,7 @@ async function setSound(request) {
         console.log("Reloaded cached sound");
     }
 
+    // No change needed
     if (previousSetRequest == request) return;
     
     // Generate web traffic redirect rules. Ion.sound will automatically try to fetch files
@@ -156,19 +157,20 @@ function addToCobra() {
 // Sets the selected sound pair to 'user-success' and 'user-fail' values.
 function updateSetSound(enabled) {
     /* This function gets stringified, so can only use backtick quotes and multi-line comments :') */
-    console.log(cobra.sound.last_set_index)
-    if (enabled || cobra.sound.last_set_index === undefined) cobra.sound.last_set_index = cobra.sound.selected_sound_pair_index;
-    console.log(cobra.sound.last_set_index)
+    const previous = cobra.sound.selected_sound_pair_index;
+    if (cobra.sound.last_set_index === undefined || cobra.sound.selected_sound_pair_index != cobra.sound.sound_pairs.length - 1)
+        cobra.sound.last_set_index = cobra.sound.selected_sound_pair_index;
     cobra.sound.selected_sound_pair_index = enabled ? cobra.sound.sound_pairs.length - 1 :
                                                       cobra.sound.last_set_index;
+    
+    /* No actual change */
+    if (previous == cobra.sound.selected_sound_pair_index) return;
 
     /* Update list elements to not have check mark */
     const previousSelectedIcon = document.querySelector(`#sound_effects_toggle i.icn-cobra-checkmark`);
     const parentAnchor = previousSelectedIcon.parentElement;
     previousSelectedIcon.remove();
     parentAnchor.innerText = parentAnchor.innerText.trim();
-    /* Don't think this is needed, but scared to delete lol */
-    /* parentAnchor.innerText = parentAnchor.innerText.replace(/&nbsp;/g, ``).replace(/[\n\r]+/g, ``); */
 
     /* Update appropriate elemnt to have checkmark */
     const toAddCheck = enabled ? document.getElementById(`user-list-element`)?.children[0] :
@@ -178,12 +180,6 @@ function updateSetSound(enabled) {
     const checkMark = document.createElement(`i`);
     checkMark.setAttribute(`class`, `icn-cobra-checkmark`);
     toAddCheck.prepend(checkMark);
-
-    /* Play the newly selected sound? */
-    const stop = cobra.sound.stop;
-    cobra.sound.stop = () => {};
-    cobra.sound.success();
-    cobra.sound.stop = stop;
 }
 
 // Adds additional option to sound options list

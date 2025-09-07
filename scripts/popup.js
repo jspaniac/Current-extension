@@ -43,6 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Returns whether the toggle is checked
+function getToggle() {
+    return document.getElementById("toggle").checked;
+}
+
 // Sets the toggle box to provided boolean value
 function setToggle(toggled) {
     const toggleElement = document.getElementById("toggle");
@@ -92,6 +97,7 @@ function toggleRequest() {
         action: 'toggle',
     }, (response) => {
         console.log(response);
+        if (getToggle()) playSound(true);
         alertElement.textContent = response.message;
     })
 }
@@ -113,6 +119,7 @@ function submitFiles() {
     }, (response) => { 
         console.log(response);
         setToggle(true);
+        playSound(true);
         alertElement.textContent = response.message;
     });
 }
