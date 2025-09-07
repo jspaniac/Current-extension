@@ -1,7 +1,7 @@
 {
     "name": "Current sound override",
     "description": "Overrides current's provided sounds to include more :)",
-    "version": "1.0",
+    "version": "1.1",
     "manifest_version": 3,
     "action": {
         "default_popup": "page.html",
