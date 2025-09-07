@@ -1,14 +1,18 @@
 // Cache user selected audio files until service worker reloads
 var previousSetRequest = null;
+var enabled = false;
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    // console.log(changeInfo, tab);
+    console.log(changeInfo, tab);
     (async() => {
         // Apply the cache on refresh
         if (tab.status === 'complete' && tab.url.includes("r90.current-rms.com")) {
             await injectFunc(addToCobra);
-            await injectFunc(updateDropdown, [setUserChoice.toString()]);
+            await injectFunc(updateDropdown, [updateSetSound.toString()]);
             if (!previousSetRequest || changeInfo.status === 'complete') await setSound();
+            if (enabled === null || changeInfo.staus === 'complete')
+                enabled = (await chrome.storage.local.get(["enabled"])).enabled ?? false;
+            injectFunc(updateSetSound, [enabled]);
         }
     })();
 })
@@ -19,20 +23,30 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         switch (request.action) {
             // User wants to update success / fail sounds
             case 'set-sound':
-                previousSetRequest = request;
-                await chrome.storage.local.set({ setSound: request }, () => console.log("Sound setting cached"));
-                await setSound();
-                await injectFunc(setUserChoice);
+                // Assume we want to enable
+                previousSetRequest = request; enabled = true;
+                await chrome.storage.local.set({ setSound: request, enabled: enabled }, () => console.log("Sound setting cached"));
+                await setSound(request);
+                await injectFunc(updateSetSound, [enabled]);
 
                 sendResponse({ message: 'Sound set' });
                 break;
             // User wants to load previously uploaded success / fail sounds if they
             // still exist
-            case 'refresh-sounds':
+            case 'refresh':
                 sendResponse({
                     message: previousSetRequest ? 'Previously uploaded sounds loaded' : 'No previously uploaded sounds',
-                    previous: previousSetRequest
+                    previous: previousSetRequest,
+                    enabled: enabled,
                 });
+                break;
+            // User wants to toggle extension functionality
+            case 'toggle':
+                enabled = !enabled;
+                await chrome.storage.local.set({ enabled: enabled });
+                await injectFunc(updateSetSound, [enabled]);
+
+                sendResponse({ message: `Extension toggled ${enabled ? 'on': 'off'}` });
                 break;
             // Unsupported operation
             default:
@@ -113,7 +127,6 @@ async function injectFunc(func, args = []) {
 
 // Adds 'user-success' and 'user-fail' sounds to ion
 function addToIon(successVolume, failVolume) {
-    // Use rand to force a refresh
     ion.sound.destroy('user-success');
     ion.sound.destroy('user-fail');
 
@@ -141,33 +154,40 @@ function addToCobra() {
 }
 
 // Sets the selected sound pair to 'user-success' and 'user-fail' values.
-function setUserChoice() {
+function updateSetSound(enabled) {
     /* This function gets stringified, so can only use backtick quotes and multi-line comments :') */
-    cobra.sound.selected_sound_pair_index = cobra.sound.sound_pairs.length - 1;
+    console.log(cobra.sound.last_set_index)
+    if (enabled || cobra.sound.last_set_index === undefined) cobra.sound.last_set_index = cobra.sound.selected_sound_pair_index;
+    console.log(cobra.sound.last_set_index)
+    cobra.sound.selected_sound_pair_index = enabled ? cobra.sound.sound_pairs.length - 1 :
+                                                      cobra.sound.last_set_index;
 
-    /* TODO: Update list elements to not have check mark */
+    /* Update list elements to not have check mark */
     const previousSelectedIcon = document.querySelector(`#sound_effects_toggle i.icn-cobra-checkmark`);
     const parentAnchor = previousSelectedIcon.parentElement;
     previousSelectedIcon.remove();
-    parentAnchor.innerText = parentAnchor.innerText.replace(/&nbsp;/g, ``).replace(/[\n\r]+/g, ``);
+    parentAnchor.innerText = parentAnchor.innerText.trim();
+    /* Don't think this is needed, but scared to delete lol */
+    /* parentAnchor.innerText = parentAnchor.innerText.replace(/&nbsp;/g, ``).replace(/[\n\r]+/g, ``); */
 
-    /* Update user elemnt to have checkmark */
-    const userLink = document.getElementById(`user-list-element`).children[0];
-    if (userLink.children.length == 1) return; /* Already exists */
+    /* Update appropriate elemnt to have checkmark */
+    const toAddCheck = enabled ? document.getElementById(`user-list-element`)?.children[0] :
+                                 document.getElementById(`sound_effects_toggle`)?.children[0]?.children[1]?.children[cobra.sound.selected_sound_pair_index]?.children[0];
     
+    toAddCheck.innerHTML = ` \u00A0 ` + toAddCheck.innerHTML.trim();
     const checkMark = document.createElement(`i`);
     checkMark.setAttribute(`class`, `icn-cobra-checkmark`);
-    userLink.innerHTML = ` \u00A0 User Uploaded`;
-    userLink.prepend(checkMark);
+    toAddCheck.prepend(checkMark);
 
-    /* This breaks for some reason? */
+    /* Play the newly selected sound? */
     const stop = cobra.sound.stop;
     cobra.sound.stop = () => {};
     cobra.sound.success();
     cobra.sound.stop = stop;
 }
 
-function updateDropdown(setUserChoice) {
+// Adds additional option to sound options list
+function updateDropdown(updateSetSound) {
     const soundToggle = document.getElementById("sound_effects_toggle");
     if (!soundToggle) return;
 
@@ -179,6 +199,8 @@ function updateDropdown(setUserChoice) {
     // Need to insert 
     let newListElement = document.createElement("li");
     newListElement.setAttribute("id", "user-list-element")
-    newListElement.innerHTML = `<a href="javascript:${setUserChoice};setUserChoice();">User Uploaded</a>`
+    newListElement.innerHTML = `<a>User Uploaded</a>`
+    /* Allows the dropdown menu to have functionality, disabled for now */
+    /* newListElement.innerHTML = `<a href="javascript:${updateSetSound};updateSetSound(true);">User Uploaded</a>` */
     parent.append(newListElement)
 }

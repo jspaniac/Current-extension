@@ -1,9 +1,20 @@
+#alertElement {
+    margin: 2;
+    width: 75%;
+}
+
 .center {
     text-align: center;
 }
 
 .volume {
     font-size: 15;
+}
+
+.title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 #submit {

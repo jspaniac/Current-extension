@@ -21,11 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sets up the submit files button
     document.getElementById("submit")
         .addEventListener('click', () => { submitFiles() });
+    
+    // Sets up toggle functionality
+    document.getElementById("toggle")
+        .addEventListener('change', () => { toggleRequest() });
 
     // Connects alert element
     alertElement = document.getElementById("alertElement");
     // Try loading saved sounds now that alert element is connected
-    chrome.runtime.sendMessage({ action: 'refresh-sounds' }, (response) => {
+    chrome.runtime.sendMessage({ action: 'refresh' }, (response) => {
+        console.log(response);
         alertElement.textContent = response.message;
         if (response.previous) {
             // Previous response saved and loaded, update
@@ -34,8 +39,15 @@ document.addEventListener('DOMContentLoaded', () => {
             failData = response.previous.fail;
             setVolume(false, response.previous.failVolume);
         }
+        setToggle(response.enabled);
     });
 });
+
+// Sets the toggle box to provided boolean value
+function setToggle(toggled) {
+    const toggleElement = document.getElementById("toggle");
+    toggleElement.checked = toggled;
+}
 
 // Plays either the currently selected success or fail sound if loaded
 function playSound(success) {
@@ -73,6 +85,17 @@ function setSound(e, success) {
     }
 }
 
+// Toggles plugin functionality
+function toggleRequest() {
+    // Don't need to send value since it will just be opposite of backend
+    chrome.runtime.sendMessage({
+        action: 'toggle',
+    }, (response) => {
+        console.log(response);
+        alertElement.textContent = response.message;
+    })
+}
+
 // Submits the selected files to the background service worker
 function submitFiles() {
     // Alert if missing data
@@ -89,6 +112,7 @@ function submitFiles() {
         failVolume: getVolume(false),
     }, (response) => { 
         console.log(response);
+        setToggle(true);
         alertElement.textContent = response.message;
     });
 }
