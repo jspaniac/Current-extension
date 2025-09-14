@@ -1,6 +1,6 @@
 // Cache user selected audio files until service worker reloads
 var previousSetRequest = null;
-var enabled = false;
+var enabled = null;
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     // console.log(changeInfo, tab);
@@ -10,8 +10,10 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
             await injectFunc(addToCobra);
             await injectFunc(updateDropdown, [updateSetSound.toString()]);
             if (!previousSetRequest || changeInfo.status === 'complete') await setSound();
-            if (enabled === null || changeInfo.staus === 'complete')
-                enabled = (await chrome.storage.local.get(["enabled"])).enabled ?? false;
+            
+            if (enabled === null && changeInfo.staus === 'complete')
+                enabled = (await chrome.storage.sync.get(["enabled"])).enabled ?? false;
+            // TODO: Do we have to worry about loading into on and cache is off?
             await injectFunc(updateSetSound, [enabled]);
         }
     })();
@@ -25,7 +27,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             case 'set-sound':
                 // Assume we want to enable
                 previousSetRequest = request; enabled = true;
-                await chrome.storage.local.set({ setSound: request, enabled: enabled }, () => console.log("Sound setting cached"));
+                await chrome.storage.sync.set({ setSound: request, enabled: enabled }, () => console.log("Sound setting cached"));
                 await setSound(request);
                 await injectFunc(updateSetSound, [enabled]);
 
@@ -43,7 +45,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             // User wants to toggle extension functionality
             case 'toggle':
                 enabled = !enabled;
-                await chrome.storage.local.set({ enabled: enabled });
+                await chrome.storage.sync.set({ enabled: enabled });
                 await injectFunc(updateSetSound, [enabled]);
 
                 sendResponse({ message: `Extension toggled ${enabled ? 'on': 'off'}` });
@@ -63,7 +65,7 @@ async function setSound(request) {
     // No uploaded success / fail sounds
     if (!previousSetRequest) {
         // Try cache
-        previousSetRequest = (await chrome.storage.local.get(["setSound"])).setSound;
+        previousSetRequest = (await chrome.storage.sync.get(["setSound"])).setSound;
         if (!previousSetRequest) return false;
         console.log("Reloaded cached sound");
     }
